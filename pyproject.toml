@@ -1,0 +1,25 @@
+[project]
+name = "whisper"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Maria", email = "maria@tail-call.ru" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "accelerate>=1.14.0",
+    "datasets[audio]>=5.0.1",
+    "fastapi>=0.141.1",
+    "pip>=26.2.1",
+    "python-multipart>=0.0.32",
+    "transformers>=5.16.1",
+    "uvicorn>=0.52.4",
+]
+
+[project.scripts]
+whisper = "whisper:main"
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"

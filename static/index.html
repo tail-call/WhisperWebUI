@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whisper ASR</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --text-dim: #888;
+    --accent: #6ee7b7;
+    --accent-dim: #34d399;
+    --danger: #f87171;
+    --radius: 12px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: .25rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: .9rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    width: 100%;
+    max-width: 560px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #152020;
+  }
+  .drop-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .drop-zone .icon { font-size: 2.5rem; margin-bottom: .75rem; }
+  .drop-zone .label { font-size: 1rem; }
+  .drop-zone .hint  { font-size: .8rem; color: var(--text-dim); margin-top: .35rem; }
+
+  /* File info */
+  .file-info {
+    display: none;
+    width: 100%;
+    max-width: 560px;
+    margin-top: 1rem;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+  }
+  .file-info.visible { display: block; }
+  .file-info .name { font-weight: 500; }
+  .file-info .size { font-size: .8rem; color: var(--text-dim); margin-top: .25rem; }
+
+  /* Status */
+  .status {
+    display: none;
+    width: 100%;
+    max-width: 560px;
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: .9rem;
+    gap: .75rem;
+    align-items: center;
+  }
+  .status.visible { display: flex; }
+  .status.error   { border-left: 3px solid var(--danger); }
+  .status.success { border-left: 3px solid var(--accent-dim); }
+  .status.loading { border-left: 3px solid #60a5fa; }
+
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  .result {
+    display: none;
+    width: 100%;
+    max-width: 560px;
+    margin-top: 1.5rem;
+  }
+  .result.visible { display: block; }
+  .result h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: .75rem;
+  }
+  .result-text {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    font-size: .95rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .copy-btn {
+    margin-top: .75rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: .45rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+    transition: background .15s;
+  }
+  .copy-btn:hover { background: var(--border); }
+
+  /* Chunks table */
+  .chunks-section {
+    display: none;
+    width: 100%;
+    max-width: 560px;
+    margin-top: 1.5rem;
+  }
+  .chunks-section.visible { display: block; }
+  .chunks-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: .75rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .6rem .75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--text-dim); font-weight: 500; }
+  td { font-variant-numeric: tabular-nums; }
+  td:last-child { word-break: break-word; }
+
+  /* Reset */
+  .reset-btn {
+    margin-top: 2rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: .45rem 1.25rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+    transition: color .15s, border-color .15s;
+  }
+  .reset-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  /* Config row */
+  .config {
+    margin-bottom: 1.5rem;
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .config label { font-size: .85rem; color: var(--text-dim); }
+  .config input {
+    flex: 1;
+    min-width: 200px;
+    padding: .45rem .75rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: .85rem;
+    outline: none;
+  }
+  .config input:focus { border-color: var(--accent); }
+
+  @media (max-width: 480px) {
+    body { padding: 1.5rem .75rem; }
+    .drop-zone { padding: 2rem 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🎙️ Whisper ASR</h1>
+<p class="subtitle">Upload an audio file to transcribe with OpenAI Whisper</p>
+
+<div class="config">
+  <label for="api-url">API URL</label>
+  <input type="text" id="api-url" value="http://127.0.0.1:8009" placeholder="http://127.0.0.1:8009">
+</div>
+
+<div class="drop-zone" id="dropZone">
+  <input type="file" id="fileInput" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.webm">
+  <div class="icon">📂</div>
+  <div class="label">Drop audio file here or click to browse</div>
+  <div class="hint">Supports WAV, MP3, FLAC, OGG, M4A, WebM</div>
+</div>
+
+<div class="file-info" id="fileInfo">
+  <div class="name" id="fileName"></div>
+  <div class="size" id="fileSize"></div>
+</div>
+
+<div class="status" id="status">
+  <div class="spinner" id="spinner"></div>
+  <span id="statusText">Processing…</span>
+</div>
+
+<div class="result" id="result">
+  <h2>Transcript</h2>
+  <div class="result-text" id="resultText"></div>
+  <button class="copy-btn" id="copyBtn" onclick="copyText()">📋 Copy</button>
+</div>
+
+<div class="chunks-section" id="chunksSection">
+  <h2>Chunks</h2>
+  <table>
+    <thead><tr><th>Start</th><th>End</th><th>Text</th></tr></thead>
+    <tbody id="chunksBody"></tbody>
+  </table>
+</div>
+
+<button class="reset-btn" id="resetBtn" onclick="reset()" style="display:none;">New transcription</button>
+
+<script>
+const dropZone    = document.getElementById('dropZone');
+const fileInput   = document.getElementById('fileInput');
+const fileInfo    = document.getElementById('fileInfo');
+const fileName    = document.getElementById('fileName');
+const fileSize    = document.getElementById('fileSize');
+const status      = document.getElementById('status');
+const statusText  = document.getElementById('statusText');
+const spinner     = document.getElementById('spinner');
+const result      = document.getElementById('result');
+const resultText  = document.getElementById('resultText');
+const chunksSec   = document.getElementById('chunksSection');
+const chunksBody  = document.getElementById('chunksBody');
+const resetBtn    = document.getElementById('resetBtn');
+const apiUrlInput = document.getElementById('api-url');
+
+let selectedFile = null;
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+function fmtTime(s) {
+  if (s == null) return '—';
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1);
+  return m > 0 ? `${m}:${sec.padStart(4, '0')}` : `${sec}s`;
+}
+
+function showStatus(msg, type) {
+  statusText.textContent = msg;
+  spinner.style.display  = type === 'loading' ? 'block' : 'none';
+  status.className       = 'status visible ' + type;
+}
+function hideStatus() { status.className = 'status'; }
+
+/* ---- Drag & Drop ---- */
+['dragenter', 'dragover'].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag-over'); })
+);
+['dragleave', 'drop'].forEach(e =>
+  dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over'))
+);
+
+dropZone.addEventListener('drop', ev => {
+  ev.preventDefault();
+  if (ev.dataTransfer.files.length) selectFile(ev.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) selectFile(fileInput.files[0]);
+});
+
+function selectFile(file) {
+  selectedFile = file;
+  fileName.textContent = file.name;
+  fileSize.textContent = fmtBytes(file.size);
+  fileInfo.classList.add('visible');
+  result.classList.remove('visible');
+  chunksSec.classList.remove('visible');
+  resetBtn.style.display = 'none';
+  submit();
+}
+
+/* ---- Upload ---- */
+async function submit() {
+  if (!selectedFile) return;
+
+  const apiBase = document.location.origin;
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+
+  showStatus('Transcribing…', 'loading');
+
+  try {
+    const res = await fetch(apiBase + '/transcribe', { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+    const data = await res.json();
+    showStatus('Done!', 'success');
+
+    resultText.textContent = data.text || '(empty transcript)';
+    result.classList.add('visible');
+
+    if (data.chunks && data.chunks.length) {
+      chunksBody.innerHTML = data.chunks.map(c =>
+        `<tr><td>${fmtTime(c.timestamp[0])}</td><td>${fmtTime(c.timestamp[1])}</td><td>${escapeHtml(c.text)}</td></tr>`
+      ).join('');
+      chunksSec.classList.add('visible');
+    }
+    resetBtn.style.display = 'inline-block';
+  } catch (err) {
+    showStatus(err.message, 'error');
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function copyText() {
+  navigator.clipboard.writeText(resultText.textContent);
+  const btn = document.getElementById('copyBtn');
+  btn.textContent = '✅ Copied!';
+  setTimeout(() => btn.textContent = '📋 Copy', 1500);
+}
+
+function reset() {
+  selectedFile = null;
+  fileInput.value = '';
+  fileInfo.classList.remove('visible');
+  result.classList.remove('visible');
+  chunksSec.classList.remove('visible');
+  resetBtn.style.display = 'none';
+  hideStatus();
+}
+</script>
+</body>
+</html>
