@@ -5,25 +5,33 @@ from contextlib import asynccontextmanager
 import torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+from transformers import (
+    AutomaticSpeechRecognitionPipeline,
+    AutoModelForSpeechSeq2Seq,
+    AutoProcessor,
+    pipeline,
+)
 
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
-torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-model_id = "openai/whisper-large-v3"
+import constants
 
-pipe = None
+transcribe_pipeline: AutomaticSpeechRecognitionPipeline | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pipe
+    global transcribe_pipeline
     print("Loading Whisper model...")
+
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+    model_id = "openai/whisper-large-v3"
+
     model = AutoModelForSpeechSeq2Seq.from_pretrained(
         model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
     )
     model.to(device)
     processor = AutoProcessor.from_pretrained(model_id)
-    pipe = pipeline(
+    transcribe_pipeline = pipeline(
         "automatic-speech-recognition",
         model=model,
         tokenizer=processor.tokenizer,
@@ -38,18 +46,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Whisper ASR API", lifespan=lifespan)
 
-# Serve static frontend
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-
 
 @app.get("/")
 async def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return FileResponse(os.path.join(constants.STATIC_DIR, "index.html"))
 
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
-    if pipe is None:
+    if transcribe_pipeline is None:
         return JSONResponse(status_code=503, content={"detail": "Model not ready"})
 
     suffix = os.path.splitext(file.filename)[1] if file.filename else ".wav"
@@ -59,7 +64,7 @@ async def transcribe(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        result = pipe(tmp_path)
+        result = transcribe_pipeline(tmp_path)
         chunks = result.get("chunks", [])
         return {
             "text": result["text"],
@@ -70,8 +75,10 @@ async def transcribe(file: UploadFile = File(...)):
     finally:
         os.unlink(tmp_path)
 
+
 if __name__ == "__main__":
     import uvicorn
+
     # uvicorn.run makes this thing runnable via `python main.py`
     # normally you omit the `if __name__...` part and use
     # `fastapi dev main.py` to run the app with auto-reloading

@@ -1,7 +1,7 @@
 [project]
-name = "whisper"
+name = "whisper-web-ui"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple single page web app to run transcription models"
 readme = "README.md"
 authors = [
     { name = "Maria", email = "maria@tail-call.ru" }
@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "accelerate>=1.14.0",
-    "datasets[audio]>=5.0.1",
     "fastapi>=0.141.1",
     "pip>=26.2.1",
     "python-multipart>=0.0.32",
