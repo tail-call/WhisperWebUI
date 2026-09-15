@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from transformers import (
     AutomaticSpeechRecognitionPipeline,
     AutoModelForSpeechSeq2Seq,
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Whisper ASR API", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=constants.STATIC_DIR), name="static")
 
 
 @app.get("/")
