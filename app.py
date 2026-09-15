@@ -6,6 +6,7 @@ import torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from transformers import (
     AutomaticSpeechRecognitionPipeline,
     AutoModelForSpeechSeq2Seq,
@@ -66,7 +67,7 @@ async def transcribe(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        result = transcribe_pipeline(tmp_path)
+        result = await run_in_threadpool(transcribe_pipeline, tmp_path)
         chunks = result.get("chunks", [])
         return {
             "text": result["text"],
