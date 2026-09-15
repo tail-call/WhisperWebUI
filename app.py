@@ -1,3 +1,4 @@
+import logging
 import os
 import tempfile
 from contextlib import asynccontextmanager
@@ -16,6 +17,8 @@ from transformers import (
 import constants
 from transcription_queue import TranscriptionQueue
 
+logger = logging.getLogger(__name__)
+
 transcribe_pipeline: AutomaticSpeechRecognitionPipeline | None = None
 
 transcription_queue = TranscriptionQueue(max_queue_size=10)
@@ -24,7 +27,7 @@ transcription_queue = TranscriptionQueue(max_queue_size=10)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global transcribe_pipeline
-    print("Loading Whisper model...")
+    logger.info("Loading Whisper model...")
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -45,7 +48,7 @@ async def lifespan(app: FastAPI):
         return_timestamps=True,
     )
     transcription_queue.pipeline = transcribe_pipeline
-    print("Whisper model loaded.")
+    logger.info("Whisper model loaded.")
     await transcription_queue.start()
     yield
     await transcription_queue.stop()
@@ -75,6 +78,7 @@ async def transcribe(file: UploadFile = File(...)):
         response = await transcription_queue.submit(tmp_path)
 
         if response["status"] == "queue_full":
+            logger.warning("Transcription rejected: queue full")
             return JSONResponse(status_code=503, content=response)
         if response["status"] == "error":
             return JSONResponse(status_code=500, content=response)
@@ -86,10 +90,16 @@ async def transcribe(file: UploadFile = File(...)):
             "chunks": chunks,
         }
     except Exception as e:
+        logger.exception("Transcription failed for %s", file.filename or "unknown")
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 if __name__ == "__main__":
     import uvicorn
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
     uvicorn.run(app, host="0.0.0.0", port=8009)
