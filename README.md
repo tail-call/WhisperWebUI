@@ -6,6 +6,10 @@ Features:
 - Transcription queue
 - Audio player with navigation across generated chunks
 
+
+https://github.com/user-attachments/assets/1be19421-0789-4c33-9156-7a96d57f75e2
+
+
 ## How to run
 
 Install dependencies:
