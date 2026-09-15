@@ -13,7 +13,7 @@ const result      = document.getElementById('result');
 const resultText  = document.getElementById('resultText');
 const chunksSec   = document.getElementById('chunksSection');
 const chunksBody  = document.getElementById('chunksBody');
-const resetBtn    = document.getElementById('resetBtn');
+
 
 let selectedFile  = null;
 let audioBlobURL  = null;   // Blob URL for client-side playback
@@ -57,6 +57,9 @@ fileInput.addEventListener('change', () => {
 });
 
 function selectFile(file) {
+  // Revoke previous Blob URL to free memory before starting a new transcription
+  if (audioBlobURL) { URL.revokeObjectURL(audioBlobURL); audioBlobURL = null; }
+
   selectedFile = file;
   fileName.textContent = file.name;
   fileSize.textContent = fmtBytes(file.size);
@@ -64,7 +67,10 @@ function selectFile(file) {
   playerSec.classList.remove('visible');
   result.classList.remove('visible');
   chunksSec.classList.remove('visible');
-  resetBtn.style.display = 'none';
+  subtitleLines = [];
+  audioEl.src = '';
+  subtitleBox.innerHTML = '';
+  hideStatus();
   submit();
 }
 
@@ -98,8 +104,6 @@ async function submit() {
     }
 
     setupPlayer(data.chunks);
-
-    resetBtn.style.display = 'inline-block';
   } catch (err) {
     showStatus(err.message, 'error');
   }
@@ -181,19 +185,4 @@ function copyText() {
   setTimeout(() => btn.textContent = '📋 Copy', 1500);
 }
 
-function reset() {
-  // Revoke Blob URL to free client memory
-  if (audioBlobURL) { URL.revokeObjectURL(audioBlobURL); audioBlobURL = null; }
 
-  selectedFile = null;
-  fileInput.value = '';
-  subtitleLines = [];
-  audioEl.src = '';
-  subtitleBox.innerHTML = '';
-  playerSec.classList.remove('visible');
-  fileInfo.classList.remove('visible');
-  result.classList.remove('visible');
-  chunksSec.classList.remove('visible');
-  resetBtn.style.display = 'none';
-  hideStatus();
-}
