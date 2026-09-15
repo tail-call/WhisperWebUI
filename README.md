@@ -2,6 +2,12 @@
 
 A simple single page web app to run transcription models.
 
+Features:
+- Transcription queue
+- Audio player with navigation across generated chunks
+
+## How to run
+
 Install dependencies:
 
 ```shell

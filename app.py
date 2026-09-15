@@ -6,7 +6,6 @@ import torch
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.concurrency import run_in_threadpool
 from transformers import (
     AutomaticSpeechRecognitionPipeline,
     AutoModelForSpeechSeq2Seq,
@@ -15,8 +14,11 @@ from transformers import (
 )
 
 import constants
+from transcription_queue import TranscriptionQueue
 
 transcribe_pipeline: AutomaticSpeechRecognitionPipeline | None = None
+
+transcription_queue = TranscriptionQueue(max_queue_size=10)
 
 
 @asynccontextmanager
@@ -42,8 +44,11 @@ async def lifespan(app: FastAPI):
         device=device,
         return_timestamps=True,
     )
+    transcription_queue.pipeline = transcribe_pipeline
     print("Whisper model loaded.")
+    await transcription_queue.start()
     yield
+    await transcription_queue.stop()
 
 
 app = FastAPI(title="Whisper ASR API", lifespan=lifespan)
@@ -67,7 +72,14 @@ async def transcribe(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        result = await run_in_threadpool(transcribe_pipeline, tmp_path)
+        response = await transcription_queue.submit(tmp_path)
+
+        if response["status"] == "queue_full":
+            return JSONResponse(status_code=503, content=response)
+        if response["status"] == "error":
+            return JSONResponse(status_code=500, content=response)
+
+        result = response["result"]
         chunks = result.get("chunks", [])
         return {
             "text": result["text"],
@@ -75,14 +87,9 @@ async def transcribe(file: UploadFile = File(...)):
         }
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
-    finally:
-        os.unlink(tmp_path)
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    # uvicorn.run makes this thing runnable via `python main.py`
-    # normally you omit the `if __name__...` part and use
-    # `fastapi dev main.py` to run the app with auto-reloading
     uvicorn.run(app, host="0.0.0.0", port=8009)
